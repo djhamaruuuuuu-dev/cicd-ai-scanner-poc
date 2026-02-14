@@ -1,0 +1,40 @@
+name: Test Scanner with GitHub Repo
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create test database
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/cicd_scanner -c "CREATE TABLE IF NOT EXISTS projects (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255), github_repo VARCHAR(255));"
+
+      - name: Start local server in background
+        run: |
+          npm start &
+          sleep 5
+          echo "Server started"
+
+      - name: Run test scanner
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: cicd_scanner
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: node tests/scan-repo.js

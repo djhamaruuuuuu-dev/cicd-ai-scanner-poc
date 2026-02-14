@@ -1,6 +1,6 @@
 import express from 'express';
 import { Pool } from 'pg';
-import { analyzeFindingsWithAI } from './ai-service.js';
+import { analyzeFindingsWithAI } from '../ai-service.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -101,9 +101,39 @@ router.post('/:tool', async (req, res) => {
     );
 
     // Analyze findings with AI (async)
-    analyzeFindingsWithAI(findingsToAnalyze).catch(err => {
-      console.error('AI Analysis failed:', err);
-    });
+    analyzeFindingsWithAI(findingsToAnalyze)
+      .then(async (aiResult) => {
+        console.log(`✅ AI Analysis results received for ${findingsToAnalyze.length} findings`);
+
+        // Update findings with AI analysis results
+        for (const finding of findingsToAnalyze) {
+          const recommendations = aiResult.recommendations && aiResult.recommendations.length > 0
+            ? aiResult.recommendations
+            : ['Manual review recommended', 'Review original scanner output'];
+
+          await pool.query(
+            `UPDATE findings
+             SET ai_analysis = $1,
+                 ai_recommendations = $2,
+                 ai_priority_score = $3,
+                 ai_group_id = $4,
+                 status = $5
+             WHERE id = $6`,
+            [
+              JSON.stringify(aiResult),
+              recommendations,
+              aiResult.confidence_score || 70,
+              aiResult.group_id || 'ungrouped',
+              'analyzed',
+              finding.id
+            ]
+          );
+        }
+        console.log(`✅ Findings updated with AI analysis`);
+      })
+      .catch(err => {
+        console.error('❌ AI Analysis failed:', err);
+      });
 
     console.log(`✅ Processed ${payload.findings.length} findings from ${tool}`);
     res.status(200).json({ success: true, scanId, findingsCount: payload.findings.length });

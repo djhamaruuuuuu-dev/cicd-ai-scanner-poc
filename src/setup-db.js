@@ -75,9 +75,9 @@ async function setupDatabase() {
   } catch (error) {
     console.error('❌ Database setup error:', error);
     process.exit(1);
-  } finally {
-    await pool.end();
   }
 }
+
+export { setupDatabase };
 
 setupDatabase();
